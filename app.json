@@ -3,7 +3,7 @@
     "name": "CatalogApp",
     "slug": "CatalogApp",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "catalogapp",
     "userInterfaceStyle": "automatic",
@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.CatalogApp"
     },
     "web": {
       "output": "static",
