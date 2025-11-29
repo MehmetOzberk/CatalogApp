@@ -37,6 +37,7 @@ export default function DynamicCatalogScreen() {
       <Stack.Screen 
         options={{
           // Başlık sabit kalabilir veya dinamikleştirebilirsin
+          headerShown: false,
           title: t('product_catalog'), 
           headerStyle: { backgroundColor: '#fff' }, 
           headerTintColor: '#333',
