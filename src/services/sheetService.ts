@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Papa from 'papaparse';
 import { Product } from '../types/product';
 
-// Katalog Linkleri (.env dosyasından)
+// CATALOG URL'leri artık EAS Secret'tan (process.env) geliyor.
 const CATALOG_URLS = {
   catalog1: process.env.EXPO_PUBLIC_CATALOG_1_URL || '',
   catalog2: process.env.EXPO_PUBLIC_CATALOG_2_URL || '',
@@ -11,17 +11,17 @@ const CATALOG_URLS = {
 
 const CACHE_KEY_PREFIX = 'catalog_cache_';
 
-// --- HIZLI LINK DÖNÜŞTÜRÜCÜ (Timeout Korumalı) ---
+// --- HIZLI LINK DÖNÜŞTÜRÜCÜ ---
+// Google Drive linklerini "Direct Download" formatına çevirir.
+// Bu format API Key gerektirmez ve genellikle daha hızlıdır.
 const convertDriveLink = (url: string): string => {
   if (!url || typeof url !== 'string') return '';
   
   if (url.includes('drive.google.com')) {
-    // ID'yi ayıkla
+    // Link içindeki ID'yi yakalar (d/ID/view veya id=ID)
     const idMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
     
     if (idMatch && idMatch[1]) {
-      // Bu format ('uc?export=view') genellikle API'den daha hızlı yanıt verir
-      // ve büyük dosyalarda timeout yeme riski daha düşüktür.
       return `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
     }
   }
@@ -32,16 +32,22 @@ export const getCatalogData = async (catalogKey: keyof typeof CATALOG_URLS): Pro
   const csvUrl = CATALOG_URLS[catalogKey];
   const cacheKey = `${CACHE_KEY_PREFIX}${catalogKey}`;
 
-  // --- ÖNEMLİ: GEÇİCİ TEMİZLİK ---
-  // Eski/Bozuk veriler hafızada kalmasın diye önce siliyoruz.
-  // Sorun tamamen çözülünce bu satırı silebilirsin.
-  await AsyncStorage.removeItem(cacheKey);
-  // ------------------------------
+  // Eğer URL yoksa (Secret yüklenmediyse) boş dön
+  if (!csvUrl) {
+    console.error(`❌ URL not found for ${catalogKey}. Check EAS Secrets.`);
+    return await getFromCache(cacheKey);
+  }
 
   console.log(`📡 Fetching ${catalogKey}...`);
 
   try {
-    const response = await fetch(csvUrl);
+    const response = await fetch(csvUrl, {
+      // ÖNEMLİ: Google'ın isteği reddetmemesi için tarayıcı taklidi yapıyoruz
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/csv,text/plain,*/*',
+      }
+    });
     
     if (!response.ok) {
       console.error(`❌ Network Error on ${catalogKey}:`, response.status);
@@ -59,21 +65,19 @@ export const getCatalogData = async (catalogKey: keyof typeof CATALOG_URLS): Pro
           const processedProducts: Product[] = [];
 
           rawProducts.forEach((row, index) => {
-            // --- AKILLI SATIR ANALİZİ ---
-            // 1. Standart başlıkları dene
-            // row[''] -> Senin loglarında çıkan "başlıksız sütun" hatasını çözer.
-            let rawImage = row.image || row[''] || row.Image || row.IMAGE;
-            let rawCode = row.code || row.Code || row.CODE;
+            // AKILLI SATIR ANALİZİ:
+            // 1. Standart 'image' veya hatalı boş başlık '' kontrolü
+            let rawImage = row.image || row[''] || row.Image;
+            let rawCode = row.code || row.Code;
 
-            // 2. Eğer hala bulamadıysak, satırdaki değerleri incele (Fallback)
+            // 2. Eğer hala yoksa, satırdaki sütunları sırayla dene
             if (!rawImage || !rawCode) {
                const values = Object.values(row);
-               // Satırda en az 2 sütun varsa tahmin etmeye çalış
                if (values.length >= 2) {
                  const val1 = values[0] as string;
                  const val2 = values[1] as string;
                  
-                 // İçinde 'http' geçen kesin linktir.
+                 // Linke benzeyeni resim, diğerini kod yap
                  if (val1 && typeof val1 === 'string' && val1.includes('http')) { 
                     rawImage = val1; rawCode = val2; 
                  }
@@ -83,16 +87,12 @@ export const getCatalogData = async (catalogKey: keyof typeof CATALOG_URLS): Pro
                }
             }
 
-            // Eğer hala yoksa bu satırı atla
+            // Veri eksikse atla
             if (!rawCode || !rawImage) {
-              // Sadece gerçekten boşsa uyar, spam yapmasın
-              if (Object.keys(row).length > 1) {
-                 console.warn(`⚠️ Satır ${index + 1} atlandı (Veri okunamadı):`, JSON.stringify(row));
-              }
               return;
             }
 
-            // Temizle, Linki Düzelt ve Ekle
+            // Temizle ve Ekle
             processedProducts.push({
               code: rawCode.toString().trim(), 
               image: convertDriveLink(rawImage.toString().trim())
@@ -100,12 +100,13 @@ export const getCatalogData = async (catalogKey: keyof typeof CATALOG_URLS): Pro
           });
 
           if (processedProducts.length > 0) {
-            // Başarılı veriyi kaydet
+            // Başarılıysa telefona kaydet (Cache)
             await AsyncStorage.setItem(cacheKey, JSON.stringify(processedProducts));
-            console.log(`✅ ${catalogKey} updated successfully. Items: ${processedProducts.length}`);
+            console.log(`✅ ${catalogKey} updated. Valid Items: ${processedProducts.length}`);
             resolve(processedProducts);
           } else {
-            console.error(`❌ ${catalogKey} returned 0 items after processing.`);
+            console.error(`❌ ${catalogKey} returned 0 valid items.`);
+            // Boş geldiyse eski kaydı göster
             const cached = await getFromCache(cacheKey);
             resolve(cached);
           }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react'; // useRef eklendi
 import { StyleSheet, View, Text, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -8,6 +8,7 @@ import Animated, {
   Extrapolation,
   runOnJS,
   SharedValue,
+  Easing,
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
@@ -15,6 +16,7 @@ import { Audio } from 'expo-av';
 import { Product } from '../types/product';
 
 const PERSPECTIVE = 2000;
+const ANIMATION_DURATION = 300; 
 
 interface FlipbookProps {
   products: Product[];
@@ -66,11 +68,9 @@ const AnimatedPage = ({
   isLandscape: boolean;
 }) => {
   
-  // 1. POZİSYON VE DÖNÜŞ ANİMASYONU
   const animatedStyle = useAnimatedStyle(() => {
     const offset = index - animatedIndex.value;
 
-    // Sonraki Sayfalar (Altta bekleyenler)
     if (offset > 0) {
       return { 
         transform: [{ rotateY: '0deg' }], 
@@ -79,9 +79,8 @@ const AnimatedPage = ({
       };
     }
 
-    // Mevcut Sayfa (Dönen)
     if (offset === 0) {
-      if (translationX.value > 0) { // Geriye çekiliyorsa sabit dur
+      if (translationX.value > 0) { 
          return { transform: [{ rotateY: '0deg' }], zIndex: 10, opacity: 1 };
       }
       const rotateY = interpolate(translationX.value, [0, -pageWidth], [0, -180], Extrapolation.CLAMP);
@@ -93,16 +92,15 @@ const AnimatedPage = ({
           { translateX: pageWidth / 2 },
         ],
         zIndex: 10,
-        opacity: rotateY < -90 ? 0 : 1, // 90 dereceyi geçince gizle
+        opacity: rotateY < -90 ? 0 : 1, 
       };
     }
 
-    // Önceki Sayfa (Kapanan / Geri Gelen)
     if (offset === -1) {
       if (translationX.value <= 0) {
-        return { transform: [{ rotateY: '-120deg' }], zIndex: -1, opacity: 0 };
+        return { transform: [{ rotateY: '-110deg' }], zIndex: -1, opacity: 0 };
       }
-      const rotateY = interpolate(translationX.value, [0, pageWidth], [-120, 0], Extrapolation.CLAMP);
+      const rotateY = interpolate(translationX.value, [0, pageWidth], [-110, 0], Extrapolation.CLAMP);
       return {
         transform: [
           { perspective: PERSPECTIVE },
@@ -118,61 +116,26 @@ const AnimatedPage = ({
     return { opacity: 0, zIndex: -100, transform: [{ translateX: 10000 }] };
   });
 
-  // 2. GELİŞMİŞ GÖLGE ANİMASYONU (Shadow on Bottom Page)
   const shadowStyle = useAnimatedStyle(() => {
     const offset = index - animatedIndex.value;
     let opacity = 0;
 
-    // SENARYO 1: İLERİ GİDİYORUZ (Current -> Next)
-    // Şu anki sayfa (offset 0) kalkıyor, altındaki sayfaya (offset 1) gölge düşmeli.
-    
-    // a) Altındaki Sayfa (Index 1) İçin Gölge:
-    if (offset === 1) {
-      // Hareket negatif (sola doğru) ise
-      if (translationX.value < 0) {
-        // Sayfa henüz az kalkmışken gölge çok olur, tam açılınca (Width) gölge biter.
-        opacity = interpolate(
-          translationX.value,
-          [0, -pageWidth], 
-          [0.5, 0], // %80 koyuluktan %0'a
-          Extrapolation.CLAMP
-        );
-      }
+    if (offset === 1 && translationX.value < 0) {
+        opacity = interpolate(translationX.value, [0, -pageWidth], [0.5, 0], Extrapolation.CLAMP);
     }
-
-    // b) Dönen Sayfa (Index 0) İçin Hafif Kararma (Kağıt bükülmesi hissi)
     if (offset === 0 && translationX.value < 0) {
-        opacity = interpolate(
-          translationX.value,
-          [0, -pageWidth / 2],
-          [0, 0.15], // En fazla %30 kararsın
-          Extrapolation.CLAMP
-        );
+        opacity = interpolate(translationX.value, [0, -pageWidth / 2], [0, 0.15], Extrapolation.CLAMP);
     }
-
-    // SENARYO 2: GERİ GELİYORUZ (Prev -> Current)
-    // Önceki sayfa (offset -1) kapanıyor, şu anki sayfaya (offset 0) gölge düşmeli.
-
-    // a) Şu anki Sayfa (Index 0) üzerine düşen kapak gölgesi:
     if (offset === 0 && translationX.value > 0) {
-       opacity = interpolate(
-         translationX.value,
-         [0, pageWidth],
-         [0, 0.5], // Açıkken gölge yok, kapandıkça gölge artar
-         Extrapolation.CLAMP
-       );
+       opacity = interpolate(translationX.value, [0, pageWidth], [0, 0.5], Extrapolation.CLAMP);
     }
 
-    return {
-      opacity,
-      zIndex: 100, // En üstte
-    };
+    return { opacity, zIndex: 100 };
   });
 
   return (
     <Animated.View style={[styles.pageWrapper, animatedStyle]} pointerEvents="none">
       <PageContent item={item} index={index} isLandscape={isLandscape} />
-      {/* Siyah Gölge Katmanı */}
       <Animated.View style={[styles.shadowOverlay, shadowStyle]} />
     </Animated.View>
   );
@@ -187,18 +150,37 @@ export const Flipbook: React.FC<FlipbookProps> = ({ products }) => {
   const translationX = useSharedValue(0);
   const animatedIndex = useSharedValue(0);
 
+  // --- SES KORUMASI İÇİN REF ---
+  // Son ses çalınma zamanını tutar
+  const lastSoundTime = useRef(0);
+
+  // --- GÜNCELLENMİŞ SES FONKSİYONU ---
   const playFlipSound = async () => {
+    const now = Date.now();
+    
+    // Eğer son ses çalınmasından bu yana 200ms geçmediyse, sesi ÇALMA.
+    // Bu sayede spam engellenir.
+    if (now - lastSoundTime.current < 200) {
+      return;
+    }
+
+    // Zamanı güncelle ve sesi çal
+    lastSoundTime.current = now;
+
     try {
       const { sound } = await Audio.Sound.createAsync(
         require('../../assets/page-flip.mp3') 
       );
       await sound.playAsync();
+      
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
           sound.unloadAsync();
         }
       });
-    } catch (error) { }
+    } catch (error) { 
+      // Dosya yoksa sessiz kal
+    }
   };
 
   const handleStateUpdate = (newIndex: number) => {
@@ -212,9 +194,13 @@ export const Flipbook: React.FC<FlipbookProps> = ({ products }) => {
       translationX.value = e.translationX;
     })
     .onEnd((e) => {
-      if (e.translationX < -PAGE_WIDTH * 0.3 && animatedIndex.value < products.length - 1) {
-        runOnJS(playFlipSound)();
-        translationX.value = withTiming(-PAGE_WIDTH, { duration: 500 }, (finished) => {
+      if (
+        (e.translationX < -PAGE_WIDTH * 0.3 || e.velocityX < -500) && 
+        animatedIndex.value < products.length - 1
+      ) {
+        runOnJS(playFlipSound)(); 
+        
+        translationX.value = withTiming(-PAGE_WIDTH, { duration: ANIMATION_DURATION, easing: Easing.out(Easing.quad) }, (finished) => {
           if (finished) {
             animatedIndex.value += 1;
             translationX.value = 0;
@@ -222,9 +208,13 @@ export const Flipbook: React.FC<FlipbookProps> = ({ products }) => {
           }
         });
       } 
-      else if (e.translationX > PAGE_WIDTH * 0.3 && animatedIndex.value > 0) {
-        runOnJS(playFlipSound)();
-        translationX.value = withTiming(PAGE_WIDTH, { duration: 500 }, (finished) => {
+      else if (
+        (e.translationX > PAGE_WIDTH * 0.3 || e.velocityX > 500) && 
+        animatedIndex.value > 0
+      ) {
+        runOnJS(playFlipSound)(); 
+
+        translationX.value = withTiming(PAGE_WIDTH, { duration: ANIMATION_DURATION, easing: Easing.out(Easing.quad) }, (finished) => {
           if (finished) {
             animatedIndex.value -= 1;
             translationX.value = 0;
@@ -233,7 +223,7 @@ export const Flipbook: React.FC<FlipbookProps> = ({ products }) => {
         });
       } 
       else {
-        translationX.value = withTiming(0, { duration: 300 });
+        translationX.value = withTiming(0, { duration: 200 });
       }
     });
 
@@ -241,8 +231,9 @@ export const Flipbook: React.FC<FlipbookProps> = ({ products }) => {
     .onEnd((e) => {
       if (e.x > PAGE_WIDTH / 2) {
         if (animatedIndex.value < products.length - 1) {
-          runOnJS(playFlipSound)();
-          translationX.value = withTiming(-PAGE_WIDTH, { duration: 600 }, (finished) => {
+          runOnJS(playFlipSound)(); 
+
+          translationX.value = withTiming(-PAGE_WIDTH, { duration: ANIMATION_DURATION, easing: Easing.out(Easing.quad) }, (finished) => {
             if (finished) {
               animatedIndex.value += 1;
               translationX.value = 0;
@@ -254,7 +245,8 @@ export const Flipbook: React.FC<FlipbookProps> = ({ products }) => {
       else {
         if (animatedIndex.value > 0) {
           runOnJS(playFlipSound)();
-          translationX.value = withTiming(PAGE_WIDTH, { duration: 600 }, (finished) => {
+
+          translationX.value = withTiming(PAGE_WIDTH, { duration: ANIMATION_DURATION, easing: Easing.out(Easing.quad) }, (finished) => {
             if (finished) {
               animatedIndex.value -= 1;
               translationX.value = 0;
@@ -300,7 +292,7 @@ export const Flipbook: React.FC<FlipbookProps> = ({ products }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#222', // Arka plan koyu gri
+    backgroundColor: '#222', 
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -315,7 +307,7 @@ const styles = StyleSheet.create({
   },
   pageContainer: {
     flex: 1,
-    backgroundColor: '#e5e5e5', // Sayfa rengi açık gri
+    backgroundColor: '#e5e5e5', 
     overflow: 'hidden',
   },
   shadowOverlay: {
