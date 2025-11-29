@@ -13,7 +13,7 @@ export default function Index() {
   
   const catalogs: { id: number; name: string; route: RoutePath; image: any }[] = [
     { id: 1, name: t('embroidered'), route: '/catalog/catalog1', image: require('../assets/images/catalog1.jpg') },
-    { id: 2, name: t('printed'), route: '/catalog/catalog2', image: require('../assets/images/catalog2.jpg') },
+    { id: 2, name: t('set'), route: '/catalog/catalog2', image: require('../assets/images/catalog2.jpg') },
     { id: 3, name: t('lace'), route: '/catalog/catalog3', image: require('../assets/images/catalog3.jpg') },
   ];
 

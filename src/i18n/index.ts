@@ -8,7 +8,7 @@ const resources = {
   en: {
     translation: {
       "catalogs": "Catalogs",
-      "printed": "Printed",
+      "set": "Set",
       "embroidered": "Embroidered",
       "lace": "Lace",
       "product_catalog": "Product Catalog",
@@ -19,7 +19,7 @@ const resources = {
   tr: {
     translation: {
       "catalogs": "Kataloglar",
-      "printed": "Baskılı",
+      "set": "Set",
       "embroidered": "Nakışlı",
       "lace": "Dantelli",
       "product_catalog": "Ürün Kataloğu",
@@ -30,7 +30,7 @@ const resources = {
   ru: {
     translation: {
       "catalogs": "Каталоги",
-      "printed": "С принтом",
+      "set": "Комплект",
       "embroidered": "С вышивкой",
       "lace": "Кружевные",
       "product_catalog": "Каталог товаров",
