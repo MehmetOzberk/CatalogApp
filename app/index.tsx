@@ -16,14 +16,14 @@ export default function Index() {
   const catalogs: { id: number; name: string; route: RoutePath; image: any }[] = [
     { 
       id: 1, 
-      name: t('printed'), 
+      name: t('embroidered'), 
       // DÜZELTME 2: Rota artık dinamik klasöre gidiyor
       route: '/catalog/catalog1', 
       image: require('../assets/images/catalog1.jpg') 
     },
     { 
       id: 2, 
-      name: t('embroidered'), 
+      name: t('printed'), 
       route: '/catalog/catalog2', 
       image: require('../assets/images/catalog2.jpg') 
     },
@@ -80,5 +80,5 @@ const styles = StyleSheet.create({
   catalogRow: { flex: 1, justifyContent: 'space-evenly', alignItems: 'center', width: '100%', paddingBottom: 15 },
   catalogButton: { alignItems: 'center', justifyContent: 'center' },
   catalogText: { marginTop: 5, fontSize: 16, fontWeight: '600' },
-  catalogImage: { borderRadius: 15, resizeMode: 'cover', borderWidth: 1, borderColor: '#eee' },
+  catalogImage: { borderRadius: 15, resizeMode: 'cover', borderWidth: 1, borderColor: '#eee', shadowColor: '#000', shadowOffset: { width:10, height: 2 }, shadowOpacity: 0.3, shadowRadius: 100},
 });

@@ -11,6 +11,8 @@ const resources = {
       "lace": "Lace",
       "product_catalog": "Product Catalog",
       "back": "Back",
+      // YENİ EKLENEN:
+      "loading": "Loading catalog..."
     }
   },
   tr: {
@@ -21,9 +23,10 @@ const resources = {
       "lace": "Dantelli",
       "product_catalog": "Ürün Kataloğu",
       "back": "Geri",
+      // YENİ EKLENEN:
+      "loading": "Katalog yükleniyor..."
     }
   },
-  // YENİ EKLENEN KISIM: RUSÇA
   ru: {
     translation: {
       "catalogs": "Каталоги",
@@ -32,6 +35,8 @@ const resources = {
       "lace": "Кружевные",
       "product_catalog": "Каталог товаров",
       "back": "Назад",
+      // YENİ EKLENEN:
+      "loading": "Загрузка каталога..."
     }
   }
 };
